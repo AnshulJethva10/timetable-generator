@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Admin Panel</h1>
+        <a href="{{ url_for('main.logout') }}" class="btn btn-outline-danger">Logout</a>
+    </div>
+
+    <div class="row">
+
+        <div class="col-lg-7">
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>1. Upload Timetable Data</h4>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Upload an .xlsx file to extract subjects, professors, and the number of lectures required. This will clear all existing data.</p>
+                    <form method="POST" action="{{ url_for('main.upload_timetable') }}" enctype="multipart/form-data">
+                        {{ upload_form.hidden_tag() }}
+                        <div class="input-group">
+                            {{ upload_form.file(class="form-control") }}
+                            {{ upload_form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>3. Generate New Timetable</h4>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Once data is uploaded and constraints are set, click here to generate the schedule. This may take a moment.</p>
+                    <a href="{{ url_for('main.generate_new_timetable') }}" class="btn btn-success w-100">Generate Timetable</a>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Extracted Lecture Requirements</h4>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    {% if prof_subject_map %}
+                        <ul class="list-group">
+                        {% for prof, subjects in prof_subject_map.items() %}
+                            <li class="list-group-item">
+                                <strong>{{ prof }}</strong>
+                                <ul class="list-unstyled ms-3 mt-1">
+                                    {% for subject, count in subjects.items() %}
+                                    <li>{{ subject }} (x{{ count }})</li>
+                                    {% endfor %}
+                                </ul>
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">No lecture data uploaded yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Timetable Settings</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('main.update_settings') }}">
+                        {{ settings_form.hidden_tag() }}
+                        <fieldset>
+                            <legend class="h6">Lunch Break</legend>
+                            <div class="form-group mb-2">
+                                {{ settings_form.lunch_start_time.label(class="form-control-label small") }}
+                                {{ settings_form.lunch_start_time(class="form-control form-control-sm") }}
+                            </div>
+                            <div class="form-group mb-3">
+                                {{ settings_form.lunch_end_time.label(class="form-control-label small") }}
+                                {{ settings_form.lunch_end_time(class="form-control form-control-sm") }}
+                            </div>
+                        </fieldset>
+                        <fieldset>
+                            <legend class="h6">Recess</legend>
+                            <div class="form-group mb-2">
+                                {{ settings_form.recess_start_time.label(class="form-control-label small") }}
+                                {{ settings_form.recess_start_time(class="form-control form-control-sm") }}
+                            </div>
+                            <div class="form-group mb-3">
+                                {{ settings_form.recess_end_time.label(class="form-control-label small") }}
+                                {{ settings_form.recess_end_time(class="form-control form-control-sm") }}
+                            </div>
+                        </fieldset>
+                        <div class="form-group mt-3">
+                            {{ settings_form.submit(class="btn btn-info w-100") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>2. Set Professor Unavailability</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('main.add_constraint') }}">
+                        {{ constraint_form.hidden_tag() }}
+                        <div class="form-group mb-2">
+                            {{ constraint_form.professor.label(class="form-control-label") }}
+                            {{ constraint_form.professor(class="form-select") }}
+                        </div>
+                        <div class="form-group mb-2">
+                            {{ constraint_form.day.label(class="form-control-label") }}
+                            {{ constraint_form.day(class="form-select") }}
+                        </div>
+                        <div class="form-group mb-2">
+                            {{ constraint_form.start_time.label(class="form-control-label") }}
+                            {{ constraint_form.start_time(class="form-control", placeholder="HH:MM") }}
+                        </div>
+                        <div class="form-group mb-3">
+                            {{ constraint_form.end_time.label(class="form-control-label") }}
+                            {{ constraint_form.end_time(class="form-control", placeholder="HH:MM") }}
+                        </div>
+                        <div class="form-group">
+                            {{ constraint_form.submit(class="btn btn-warning w-100") }}
+                        </div>
+                    </form>
+                    <hr>
+                    <h5 class="mt-3">Existing Constraints</h5>
+                    <ul class="list-group" style="max-height: 200px; overflow-y: auto;">
+                        {% for c in constraints %}
+                            <li class="list-group-item">{{ c.professor_name }} unavailable on {{ c.day }}s from {{ c.start_time }} to {{ c.end_time }}</li>
+                        {% else %}
+                            <li class="list-group-item">No constraints set.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
