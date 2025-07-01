@@ -1,0 +1,10 @@
+Flask
+Flask-PyMongo
+Flask-Login
+Flask-WTF
+Werkzeug
+pandas
+openpyxl
+deap
+pymongo
+dnspython
