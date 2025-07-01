@@ -1,114 +1,70 @@
-import random
-from flask import Flask, render_template, redirect, url_for, flash
+import os
+from flask import Flask
+from werkzeug.security import generate_password_hash
+from bson import ObjectId
+from pymongo.errors import ConnectionFailure
 
-# Initialize the Flask App
-app = Flask(__name__)
-# A secret key is needed for flashing messages
-app.config['SECRET_KEY'] = 'a-very-secret-key' 
+# Import extensions from the new extensions.py file
+from extensions import mongo, login_manager
 
-# --- FAKE DATABASE (In-memory data for simplicity) ---
-# In a real project, this data would come from a database like MySQL or PostgreSQL.
-
-COURSES = {
-    "CS101": {"name": "Intro to Python", "instructor": "Dr. Smith"},
-    "MA202": {"name": "Calculus II", "instructor": "Dr. Jones"},
-    "EN105": {"name": "Creative Writing", "instructor": "Prof. Williams"},
-    "PH210": {"name": "Modern Physics", "instructor": "Dr. Davis"},
-    "HI101": {"name": "World History", "instructor": "Prof. Miller"},
-}
-
-ROOMS = ["Room 101", "Room 102", "Auditorium A"]
-TIMESLOTS = ["09:00 - 10:30", "11:00 - 12:30", "14:00 - 15:30"]
-DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-
-# This will store our generated timetable
-current_timetable = {}
-
-# --- HELPER FUNCTION ---
-def get_past_timetable_constraints():
-    """
-    Simulates analyzing past timetables to get constraints.
-    """
-    return {
-        "CS101": {"preferred_room": "Auditorium A"},
-        "MA202": {"avoid_day": "Friday"},
-    }
-
-# --- ROUTES ---
-
-@app.route('/')
-def index():
-    """
-    The main page that displays the current timetable.
-    """
-    # If the timetable is empty on the first visit, generate it.
-    if not current_timetable:
-        generate_timetable(flash_messages=False) # Generate without flashing
-    return render_template('index.html', timetable=current_timetable, days=DAYS, timeslots=TIMESLOTS)
-
-@app.route('/generate')
-def handle_generate_request():
-    """
-    This is the route that gets called when the user clicks the button.
-    It's responsible for calling the generation logic and redirecting.
-    """
-    generate_timetable(flash_messages=True) # Generate WITH flashing
-    return redirect(url_for('index'))
+# The user_loader callback is defined here, using the imported login_manager
+@login_manager.user_loader
+def load_user(user_id):
+    from models import User
+    user_data = mongo.db.users.find_one({'_id': ObjectId(user_id)})
+    if not user_data:
+        return None
+    return User(user_data)
 
 
-# --- CORE LOGIC ---
-
-# MODIFICATION 1: Add a parameter to control flashing
-def generate_timetable(flash_messages=True):
-    """
-    This is the core logic for generating the timetable.
-    It clears the old timetable and creates a new one.
-    The flash_messages flag controls whether to show messages to the user.
-    """
-    global current_timetable
-    current_timetable.clear()
-
-    constraints = get_past_timetable_constraints()
-
-    available_slots = []
-    for day in DAYS:
-        for time in TIMESLOTS:
-            for room in ROOMS:
-                available_slots.append({"day": day, "time": time, "room": room})
+def create_app():
+    """Create and configure an instance of the Flask application."""
+    app = Flask(__name__)
+    app.config['SECRET_KEY'] = 'your_super_secret_key_change_it'
     
-    random.shuffle(available_slots)
-
-    generated_successfully = True
-    for course_id, course_info in COURSES.items():
-        slot_found = False
-        for i, slot in enumerate(available_slots):
-            if course_id in constraints:
-                constraint = constraints[course_id]
-                if constraint.get("preferred_room") and slot["room"] != constraint["preferred_room"]:
-                    continue
-                if constraint.get("avoid_day") and slot["day"] == constraint["avoid_day"]:
-                    continue
-
-            current_timetable[(slot["day"], slot["time"], slot["room"])] = {
-                "course_id": course_id, 
-                "name": course_info["name"],
-                "instructor": course_info["instructor"]
-            }
-            available_slots.pop(i)
-            slot_found = True
-            break
+    # Your MongoDB Atlas connection string
+    app.config['MONGO_URI'] = ""
+    
+    # Initialize the extensions with the app instance
+    try:
+        mongo.init_app(app)
+        login_manager.init_app(app)
         
-        if not slot_found:
-            if flash_messages: # Only flash if the flag is True
-                flash(f"Could not find a suitable slot for {course_info['name']}! Try generating again.", "error")
-            generated_successfully = False
-            break
+        # Verify connection
+        mongo.cx.admin.command('ismaster') 
+        print("MongoDB connection successful.")
+    except ConnectionFailure as e:
+        raise ConnectionFailure(f"FATAL: Could not connect to MongoDB. Check your MONGO_URI and network access. Original error: {e}")
+    except Exception as e:
+        raise Exception(f"An unexpected error occurred during MongoDB initialization: {e}")
 
-    if generated_successfully and flash_messages: # Only flash if the flag is True
-        flash("Successfully generated a new timetable!", "success")
+    # Configure login manager
+    login_manager.login_view = 'main.login'
+    login_manager.login_message_category = 'info'
 
+    # Import and register blueprints
+    from routes import main_bp
+    app.register_blueprint(main_bp)
 
-# To run the app
+    @app.before_request
+    def ensure_admin_user():
+        if not hasattr(app, '_admin_user_created'):
+            users_collection = mongo.db.users
+            if not users_collection.find_one({'username': 'admin'}):
+                hashed_password = generate_password_hash('adminpassword', method='pbkdf2:sha256')
+                users_collection.insert_one({
+                    'username': 'admin',
+                    'password': hashed_password,
+                    'role': 'admin'
+                })
+                print("Default admin user created.")
+            app._admin_user_created = True
+
+    return app
+
 if __name__ == '__main__':
-    # MODIFICATION 2: Remove the initial call from here. It's now handled by the index route.
-    app.run(debug=True)
+    try:
+        app = create_app()
+        app.run(debug=True)
+    except (ValueError, ConnectionFailure) as e:
+        print(e)
