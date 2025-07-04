@@ -33,7 +33,6 @@ TIME_SLOTS = [
 ]
 
 
-# ... (No changes to decorators, auth routes, dashboard) ...
 # --- DECORATORS ---
 def admin_required(f):
     @wraps(f)
@@ -93,8 +92,8 @@ def logout():
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
-    if current_user.role == 'admin':
-        return redirect(url_for('main.admin_panel'))
+    # Remove the automatic redirect to admin panel for admins
+    # Let both admin and regular users see the dashboard
     
     timetable_data = list(mongo.db.timetable.find())
     
@@ -109,7 +108,6 @@ def dashboard():
 
 
 # --- ADMIN PANEL ROUTES ---
-# ... (No changes to admin_panel, update_settings) ...
 @main_bp.route('/admin')
 @login_required
 @admin_required
@@ -229,7 +227,6 @@ def upload_timetable():
     return redirect(url_for('main.admin_panel'))
 
 
-# ... (No changes to add_constraint) ...
 @main_bp.route('/admin/constraints', methods=['POST'])
 @login_required
 @admin_required
@@ -254,7 +251,6 @@ def add_constraint():
             
     return redirect(url_for('main.admin_panel'))
 
-# ... (No changes to generate_new_timetable) ...
 @main_bp.route('/admin/generate')
 @login_required
 @admin_required
