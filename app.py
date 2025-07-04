@@ -100,6 +100,9 @@ def create_app():
 
     return app
 
+# Create the app instance for Gunicorn
+app = create_app()
+
 # --- Main Execution Block ---
 if __name__ == '__main__':
     try:
