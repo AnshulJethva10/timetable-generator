@@ -31,15 +31,27 @@ def create_app():
     # Load secret key and MongoDB URI from environment variables
     # This is more secure than hardcoding them in the file.
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-    app.config['MONGO_URI'] = os.environ.get('MONGO_URI')
+    
+    # Updated MongoDB URI configuration for production compatibility
+    # Try multiple environment variable names for better platform compatibility
+    mongo_uri = (
+        os.environ.get('MONGO_URI') or 
+        os.environ.get('MONGODB_URI') or 
+        os.environ.get('DATABASE_URL')
+    )
+    
+    # Set default for local development if no URI is found
+    if not mongo_uri:
+        mongo_uri = "mongodb://localhost:27017/your_database_name"
+        print("Warning: No MongoDB URI found in environment variables. Using local default.")
+    
+    app.config['MONGO_URI'] = mongo_uri
 
     # --- Validation Section ---
     # Raise an error if essential configuration is missing.
     # This helps catch configuration issues early.
     if not app.config['SECRET_KEY']:
         raise ValueError("FATAL: No SECRET_KEY environment variable set. Please set it in your .env file or hosting environment.")
-    if not app.config['MONGO_URI']:
-        raise ValueError("FATAL: No MONGO_URI environment variable set. Please set it in your .env file or hosting environment.")
 
     # --- Extensions Initialization ---
     # Initialize Flask extensions with the app instance.
@@ -48,8 +60,9 @@ def create_app():
         login_manager.init_app(app)
         
         # Verify the database connection to ensure the URI is correct and the server is reachable.
-        mongo.cx.admin.command('ismaster') 
-        print("MongoDB connection successful.")
+        # Updated to use ping command which is more reliable
+        mongo.cx.admin.command('ping')
+        print(f"MongoDB connection successful to: {mongo_uri[:20]}...")
     except ConnectionFailure as e:
         # Provide a more informative error message if the connection fails.
         raise ConnectionFailure(f"FATAL: Could not connect to MongoDB. Check your MONGO_URI and network access. Original error: {e}")
@@ -92,8 +105,12 @@ if __name__ == '__main__':
     try:
         # Create the Flask app instance
         app = create_app()
-        # Run the app in debug mode for development
-        app.run(debug=True)
+        # Updated to work with production hosting
+        port = int(os.environ.get('PORT', 5000))
+        debug_mode = os.environ.get('FLASK_ENV') == 'development'
+        
+        # Run the app - bind to 0.0.0.0 for production hosting
+        app.run(host='0.0.0.0', port=port, debug=debug_mode)
     except (ValueError, ConnectionFailure) as e:
         # Catch configuration and connection errors on startup and print them.
         print(e)
